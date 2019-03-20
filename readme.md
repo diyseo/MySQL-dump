@@ -23,6 +23,12 @@ $dump->tables['search_cache'] = MySQLDump::DROP | MySQLDump::CREATE;
 $dump->tables['log'] = MySQLDump::NONE;
 ```
 
+Specific to wordpress, you can specify that on the wp_posts table it ignore posts and revisions:
+
+```php
+$dump->tables['wp_posts'] = WPEXCLUDE;
+```
+
 Then simply call `save()` or `write()`:
 
 ```php

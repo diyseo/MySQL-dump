@@ -190,6 +190,67 @@ class MySQLDump
 			fwrite($handle, "\n");
 		}
 
+		if (!$view && ($mode & self::WPEXCLUDE)) {
+			fwrite($handle, 'ALTER ' . ($view ? 'VIEW' : 'TABLE') . ' ' . $delTable . " DISABLE KEYS;\n\n");
+			$numeric = [];
+			$res = $this->connection->query("SHOW COLUMNS FROM $delTable");
+			$cols = [];
+			while ($row = $res->fetch_assoc()) {
+				$col = $row['Field'];
+				$cols[] = $this->delimite($col);
+			}
+			$cols = '(' . implode(', ', $cols) . ')';
+			$res->close();
+
+
+			$size = 0;
+			$res = $this->connection->query("SELECT * FROM $delTable", MYSQLI_USE_RESULT);
+			while ($row = $res->fetch_assoc()) {
+				$keep = 1;
+				$s = '(';
+				foreach ($row as $key => $value) {
+					if ($key == 'post_type') {
+						if ($value == 'post') {
+							$keep = 0;
+						} elseif ($value == 'revision') {
+							$keep = 0;
+						}
+					}
+
+					if ($value === null) {
+						$s .= "NULL,\t";
+					} else {
+						$s .= "'" . $this->connection->real_escape_string($value) . "',\t";
+					}
+				}
+
+				if ($keep == 1) {
+					if ($size == 0) {
+						$s = "INSERT INTO $delTable $cols VALUES\n$s";
+					} else {
+						$s = ",\n$s";
+					}
+
+					$len = strlen($s) - 1;
+					$s[$len - 1] = ')';
+					fwrite($handle, $s, $len);
+
+					$size += $len;
+					if ($size > self::MAX_SQL_SIZE) {
+						fwrite($handle, ";\n");
+						$size = 0;
+					}
+				}
+			}
+
+			$res->close();
+			if ($size) {
+				fwrite($handle, ";\n");
+			}
+			fwrite($handle, 'ALTER ' . ($view ? 'VIEW' : 'TABLE') . ' ' . $delTable . " ENABLE KEYS;\n\n");
+			fwrite($handle, "\n");
+		}
+
 		if ($mode & self::TRIGGERS) {
 			$res = $this->connection->query("SHOW TRIGGERS LIKE '" . $this->connection->real_escape_string($table) . "'");
 			if ($res->num_rows) {
